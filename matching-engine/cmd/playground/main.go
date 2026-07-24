@@ -2,29 +2,26 @@ package main
 
 import (
 	"fmt"
-	"sync"
-	"sync/atomic"
 )
 
-var counter int64
+func producer(ch chan<- int) {
+	for i := 1; i <= 5; i++ {
+		ch <- i
+	}
 
-func increment(wg *sync.WaitGroup) {
-	defer wg.Done()
+	close(ch)
+}
 
-	for i := 0; i < 1000; i++ {
-		atomic.AddInt64(&counter, 1)
+func consumer(ch <-chan int) {
+	for value := range ch {
+		fmt.Println("Received:", value)
 	}
 }
 
 func main() {
-	var wg sync.WaitGroup
+	ch := make(chan int)
 
-	wg.Add(2)
+	go producer(ch)
 
-	go increment(&wg)
-	go increment(&wg)
-
-	wg.Wait()
-
-	fmt.Println("Counter:", counter)
+	consumer(ch)
 }
