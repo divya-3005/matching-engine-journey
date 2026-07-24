@@ -157,3 +157,141 @@ func TestReplaySubmit(t *testing.T) {
 		t.Fatalf("expected sell quantity 20, got %d", sellLevel.Front().Remaining)
 	}
 }
+
+// TestReplayCancel verifies that a CANCEL record removes the resting order
+// from the book during replay.
+func TestReplayCancel(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.log")
+
+	w, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	order, err := model.NewOrder(1, "AAPL", model.Buy, model.Limit, 100, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := w.LogSubmit(order); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.LogCancel(1); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	e := engine.New(10)
+	w, err = New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+
+	if err := w.Replay(e); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(e.OrderBook().BuyOrders()) != 0 {
+		t.Fatal("expected order to be cancelled during replay")
+	}
+}
+
+// TestReplayCancelAlreadyFilled verifies that replaying a CANCEL for an order
+// that was already filled (and therefore not in the book) does not cause an error.
+func TestReplayCancelAlreadyFilled(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.log")
+
+	w, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sell, err := model.NewOrder(1, "AAPL", model.Sell, model.Limit, 100, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buy, err := model.NewOrder(2, "AAPL", model.Buy, model.Limit, 100, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// SUBMIT sell, SUBMIT buy (matches sell fully), then CANCEL sell (too late).
+	if err := w.LogSubmit(sell); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.LogSubmit(buy); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.LogCancel(1); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	e := engine.New(10)
+	w, err = New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+
+	// Replay must not fail even though the cancel targets an already-filled order.
+	if err := w.Replay(e); err != nil {
+		t.Fatalf("unexpected error replaying late cancel: %v", err)
+	}
+}
+
+// TestReplaySkipsTrade verifies that TRADE records in the WAL do not cause
+// replay to fail. Trades are output events; the engine reproduces them when
+// the corresponding SUBMIT records are replayed.
+func TestReplaySkipsTrade(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.log")
+
+	w, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	order, err := model.NewOrder(1, "AAPL", model.Buy, model.Limit, 100, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := w.LogSubmit(order); err != nil {
+		t.Fatal(err)
+	}
+
+	trade := &model.Trade{
+		ID:          1,
+		BuyOrderID:  1,
+		SellOrderID: 2,
+		Symbol:      "AAPL",
+		Price:       100,
+		Quantity:    50,
+	}
+	if err := w.LogTrade(trade); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	e := engine.New(10)
+	w, err = New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+
+	if err := w.Replay(e); err != nil {
+		t.Fatalf("replay should skip TRADE records, got error: %v", err)
+	}
+}
+

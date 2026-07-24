@@ -37,6 +37,7 @@ func (p *PriceLevel) Pop() *model.Order {
 	}
 
 	order := p.orders[0]
+	p.orders[0] = nil      // clear the slot so the GC can collect the pointer
 	p.orders = p.orders[1:]
 	return order
 }

@@ -22,24 +22,14 @@ func TestSaveAndLoadSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := func() error {
-		book.Add(buy1)
-		book.Add(buy2)
-		return nil
-	}(); err != nil {
-		t.Fatal(err)
-	}
+	book.Add(buy1)
+	book.Add(buy2)
 
 	sell1, err := model.NewOrder(3, "AAPL", model.Sell, model.Limit, 101, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := func() error {
-		book.Add(sell1)
-		return nil
-	}(); err != nil {
-		t.Fatal(err)
-	}
+	book.Add(sell1)
 
 	if err := SaveSnapshot(path, book); err != nil {
 		t.Fatal(err)

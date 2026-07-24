@@ -1,8 +1,6 @@
 package wal
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
