@@ -1,13 +1,22 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
-func square(x int) int {
-	y := x * x
-	return y
+func worker(id int) {
+	for i := 1; i <= 5; i++ {
+		fmt.Printf("Worker %d -> %d\n", id, i)
+		time.Sleep(300 * time.Millisecond)
+	}
 }
 
 func main() {
-	result := square(5)
-	fmt.Println(result)
+
+	go worker(1)
+	go worker(2)
+	go worker(3)
+
+	time.Sleep(5 * time.Second)
 }
