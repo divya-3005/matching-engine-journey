@@ -1,1 +1,2 @@
+// trade.go
 package model

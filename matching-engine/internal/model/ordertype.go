@@ -1,0 +1,2 @@
+// ordertype.go
+package model
