@@ -45,6 +45,14 @@ func (ob *OrderBook) SellOrders() []*model.Order {
 	return ob.sells.Orders()
 }
 
+func (ob *OrderBook) BuyLevels() []*PriceLevel {
+	return ob.buys.Levels()
+}
+
+func (ob *OrderBook) SellLevels() []*PriceLevel {
+	return ob.sells.Levels()
+}
+
 func (ob *OrderBook) Cancel(orderID uint64) (*model.Order, error) {
 	if order, ok := ob.buys.Cancel(orderID); ok {
 		return order, nil

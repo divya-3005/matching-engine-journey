@@ -87,3 +87,7 @@ func (e *Engine) ProcessNext() ([]*model.Trade, error) {
 
     return trades, nil
 }
+
+func (e *Engine) OrderBook() *orderbook.OrderBook {
+    return e.book
+}

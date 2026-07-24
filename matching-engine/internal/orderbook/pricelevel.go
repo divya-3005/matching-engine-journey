@@ -45,6 +45,12 @@ func (p *PriceLevel) Len() int {
 	return len(p.orders)
 }
 
+func (p *PriceLevel) Orders() []*model.Order {
+	orders := make([]*model.Order, len(p.orders))
+	copy(orders, p.orders)
+	return orders
+}
+
 func (p *PriceLevel) Remove(orderID uint64) (*model.Order, bool) {
 	for i, order := range p.orders {
 		if order.ID == orderID {

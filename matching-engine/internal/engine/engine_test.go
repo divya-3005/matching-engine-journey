@@ -4,7 +4,6 @@ import (
     "testing"
 
     "github.com/divya-3005/matching-engine/internal/model"
-    "github.com/divya-3005/matching-engine/internal/orderbook"
 )
 
 func mustOrder(
@@ -29,10 +28,6 @@ func mustOrder(
     }
 
     return order
-}
-
-func (e *Engine) OrderBook() *orderbook.OrderBook {
-    return e.book
 }
 
 func TestSubmitAndProcess(t *testing.T) {

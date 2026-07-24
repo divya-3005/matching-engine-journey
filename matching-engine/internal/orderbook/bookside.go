@@ -42,6 +42,16 @@ func (b *BookSide) Level(price uint64) (*PriceLevel, bool) {
 	return level, ok
 }
 
+func (b *BookSide) Levels() []*PriceLevel {
+	levels := make([]*PriceLevel, 0, len(b.levels))
+	for _, price := range b.index.prices {
+		if level, ok := b.levels[price]; ok {
+			levels = append(levels, level)
+		}
+	}
+	return levels
+}
+
 func (b *BookSide) Remove(price uint64) {
 	delete(b.levels, price)
 	b.index.Remove(price)
