@@ -3,20 +3,16 @@ package main
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
-var (
-	counter int
-	mu      sync.Mutex
-)
+var counter int64
 
 func increment(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for i := 0; i < 1000; i++ {
-		mu.Lock()
-		counter++
-		mu.Unlock()
+		atomic.AddInt64(&counter, 1)
 	}
 }
 
