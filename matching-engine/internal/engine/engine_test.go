@@ -7,6 +7,30 @@ import (
     "github.com/divya-3005/matching-engine/internal/orderbook"
 )
 
+func mustOrder(
+    t *testing.T,
+    id uint64,
+    side model.Side,
+    price uint64,
+    qty uint64,
+) *model.Order {
+    t.Helper()
+
+    order, err := model.NewOrder(
+        id,
+        "AAPL",
+        side,
+        model.Limit,
+        price,
+        qty,
+    )
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    return order
+}
+
 func (e *Engine) OrderBook() *orderbook.OrderBook {
     return e.book
 }
@@ -185,5 +209,130 @@ func TestProcessNextMatchesMultipleRestingOrders(t *testing.T) {
     }
     if level.Front().Remaining != 20 {
         t.Fatalf("expected remaining quantity 20, got %d", level.Front().Remaining)
+    }
+}
+
+func TestBuyMatchesAcrossMultiplePriceLevels(t *testing.T) {
+    e := New(10)
+
+    orders := []*model.Order{
+        mustOrder(t, 1, model.Sell, 100, 20),
+        mustOrder(t, 2, model.Sell, 101, 30),
+        mustOrder(t, 3, model.Sell, 102, 40),
+    }
+
+    for _, o := range orders {
+        if err := e.Submit(o); err != nil {
+            t.Fatal(err)
+        }
+
+        if _, err := e.ProcessNext(); err != nil {
+            t.Fatal(err)
+        }
+    }
+
+    buy := mustOrder(t, 4, model.Buy, 102, 70)
+
+    if err := e.Submit(buy); err != nil {
+        t.Fatal(err)
+    }
+
+    trades, err := e.ProcessNext()
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    if len(trades) != 3 {
+        t.Fatalf("expected 3 trades, got %d", len(trades))
+    }
+
+    if trades[0].Price != 100 || trades[0].Quantity != 20 {
+        t.Fatal("unexpected first trade")
+    }
+
+    if trades[1].Price != 101 || trades[1].Quantity != 30 {
+        t.Fatal("unexpected second trade")
+    }
+
+    if trades[2].Price != 102 || trades[2].Quantity != 20 {
+        t.Fatal("unexpected third trade")
+    }
+
+    level, ok := e.OrderBook().Sells().Level(102)
+    if !ok {
+        t.Fatal("expected remaining sell level")
+    }
+
+    resting := level.Front()
+    if resting.Remaining != 20 {
+        t.Fatalf("expected 20 remaining, got %d", resting.Remaining)
+    }
+}
+
+func TestMarketBuyConsumesBestPrices(t *testing.T) {
+    e := New(10)
+
+    orders := []*model.Order{
+        mustOrder(t, 1, model.Sell, 100, 20),
+        mustOrder(t, 2, model.Sell, 101, 30),
+        mustOrder(t, 3, model.Sell, 102, 40),
+    }
+
+    for _, o := range orders {
+        if err := e.Submit(o); err != nil {
+            t.Fatal(err)
+        }
+
+        if _, err := e.ProcessNext(); err != nil {
+            t.Fatal(err)
+        }
+    }
+
+    buy, err := model.NewOrder(4, "AAPL", model.Buy, model.Market, 0, 60)
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    if err := e.Submit(buy); err != nil {
+        t.Fatal(err)
+    }
+
+    trades, err := e.ProcessNext()
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    if len(trades) != 3 {
+        t.Fatalf("expected 3 trades, got %d", len(trades))
+    }
+
+    if trades[0].Price != 100 || trades[0].Quantity != 20 {
+        t.Fatal("unexpected first trade")
+    }
+
+    if trades[1].Price != 101 || trades[1].Quantity != 30 {
+        t.Fatal("unexpected second trade")
+    }
+
+    if trades[2].Price != 102 || trades[2].Quantity != 10 {
+        t.Fatal("unexpected third trade")
+    }
+
+    if buy.Remaining != 0 {
+        t.Fatalf("expected buy order remaining 0, got %d", buy.Remaining)
+    }
+
+    if len(e.OrderBook().Buys().Orders()) != 0 {
+        t.Fatalf("expected no resting buys, got %d", len(e.OrderBook().Buys().Orders()))
+    }
+
+    level, ok := e.OrderBook().Sells().Level(102)
+    if !ok {
+        t.Fatal("expected remaining sell level")
+    }
+
+    resting := level.Front()
+    if resting.Remaining != 30 {
+        t.Fatalf("expected 30 remaining, got %d", resting.Remaining)
     }
 }

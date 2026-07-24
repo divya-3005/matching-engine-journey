@@ -23,6 +23,10 @@ func (e *Engine) Submit(order *model.Order) error {
 }
 
 func canMatch(incoming, resting *model.Order) bool {
+    if incoming.Type == model.Market {
+        return true
+    }
+
     if incoming.Side == model.Buy {
         return incoming.Price >= resting.Price
     }
@@ -77,12 +81,9 @@ func (e *Engine) ProcessNext() ([]*model.Trade, error) {
         }
     }
 
-    if order.Remaining > 0 {
+    if order.Remaining > 0 && order.Type == model.Limit {
         e.book.Add(order)
     }
 
-    if len(trades) == 0 {
-        return nil, nil
-    }
     return trades, nil
 }

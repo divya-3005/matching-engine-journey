@@ -44,3 +44,14 @@ func (p *PriceLevel) Pop() *model.Order {
 func (p *PriceLevel) Len() int {
 	return len(p.orders)
 }
+
+func (p *PriceLevel) Remove(orderID uint64) (*model.Order, bool) {
+	for i, order := range p.orders {
+		if order.ID == orderID {
+			p.orders = append(p.orders[:i], p.orders[i+1:]...)
+			return order, true
+		}
+	}
+
+	return nil, false
+}

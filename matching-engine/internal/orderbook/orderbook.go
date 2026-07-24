@@ -1,6 +1,12 @@
 package orderbook
 
-import "github.com/divya-3005/matching-engine/internal/model"
+import (
+	"errors"
+
+	"github.com/divya-3005/matching-engine/internal/model"
+)
+
+var ErrOrderNotFound = errors.New("order not found")
 
 type OrderBook struct {
 	buys  *BookSide
@@ -37,4 +43,16 @@ func (ob *OrderBook) BuyOrders() []*model.Order {
 
 func (ob *OrderBook) SellOrders() []*model.Order {
 	return ob.sells.Orders()
+}
+
+func (ob *OrderBook) Cancel(orderID uint64) (*model.Order, error) {
+	if order, ok := ob.buys.Cancel(orderID); ok {
+		return order, nil
+	}
+
+	if order, ok := ob.sells.Cancel(orderID); ok {
+		return order, nil
+	}
+
+	return nil, ErrOrderNotFound
 }

@@ -47,6 +47,23 @@ func (b *BookSide) Remove(price uint64) {
 	b.index.Remove(price)
 }
 
+func (b *BookSide) Cancel(orderID uint64) (*model.Order, bool) {
+	for price, level := range b.levels {
+		order, ok := level.Remove(orderID)
+		if !ok {
+			continue
+		}
+
+		if level.Len() == 0 {
+			b.Remove(price)
+		}
+
+		return order, true
+	}
+
+	return nil, false
+}
+
 func (b *BookSide) Len() int {
 	return len(b.levels)
 }
