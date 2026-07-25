@@ -1,8 +1,7 @@
-# Compiled binaries
+# Compiled binaries (root-level; anchored to avoid matching cmd/* directories)
 bin/
-server
-simulator
-playground
+/server
+/simulator
 
 # Go build output
 *.exe

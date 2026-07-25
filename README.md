@@ -51,7 +51,6 @@ matching-engine-journey/
 │   └── questions/          Self-study question sets
 │
 └── matching-engine/        Go implementation
-    ├── cmd/playground/     Standalone goroutine/channel demo
     ├── internal/
     │   ├── model/          Domain types: Order, Trade, Side, OrderType
     │   ├── engine/         Orchestrator: ring buffer + order book + matching loop
@@ -59,7 +58,6 @@ matching-engine-journey/
     │   ├── ringbuffer/     Generic fixed-capacity circular queue
     │   ├── matching/       Pairwise matcher (reference implementation)
     │   └── wal/            Write-ahead log, replay, and JSON snapshots
-    └── pkg/                Reserved for future public API surface
 ```
 
 ---

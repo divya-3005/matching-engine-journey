@@ -64,6 +64,9 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // Accepts a JSON order, submits it to the engine, runs the matching loop,
 // and returns the accepted order plus any trades generated.
 func (s *Server) submitOrder(w http.ResponseWriter, r *http.Request) {
+	// Reject bodies larger than 1 MiB before the JSON decoder reads them.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	var req submitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
