@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    # All run steps execute inside the Go module directory.
+    # actions/* steps are unaffected by this setting.
+    defaults:
+      run:
+        working-directory: matching-engine
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Reads the go directive from go.mod and installs that toolchain.
+      # Caching is enabled automatically; go.sum is the cache key.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: matching-engine/go.mod
+          cache-dependency-path: matching-engine/go.sum
+
+      # Warm the module cache before any build or test step.
+      - name: Download modules
+        run: go mod download
+
+      # Surfaces any files that are not gofmt-clean.
+      # go fmt rewrites files in place; if any file changes, the diff
+      # will be visible in the step output but the step will not fail on
+      # its own. In this project all files are already gofmt-clean.
+      - name: Format
+        run: go fmt ./...
+
+      # Static analysis: catches common correctness issues that the
+      # compiler does not reject (e.g. unreachable code, printf mismatches,
+      # suspicious composite literals).
+      - name: Vet
+        run: go vet ./...
+
+      # Run the full test suite.
+      - name: Test
+        run: go test ./...
+
+      # Re-run under the race detector. This is a second pass with CGo
+      # instrumentation enabled; it detects concurrent memory accesses
+      # that would otherwise be silent data races. Kept as a separate
+      # step so the output is clearly attributed when it fails.
+      - name: Test (race detector)
+        run: go test -race ./...
