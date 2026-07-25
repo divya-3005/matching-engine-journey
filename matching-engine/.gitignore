@@ -1,0 +1,20 @@
+# Compiled binaries
+server
+simulator
+playground
+
+# Go build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go coverage output
+coverage.html
+coverage.out
+
+# Editor/OS artefacts
+.DS_Store
