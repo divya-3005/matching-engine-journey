@@ -926,6 +926,30 @@ body {
   color: #fff;
 }
 
+/* Single Top Queue Priority Banner */
+.queue-policy-strip {
+  height: 24px;
+  background: rgba(56, 189, 248, 0.05);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+.queue-policy-strip .policy-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 5px var(--accent-cyan);
+}
+
 /* Compact Tape Table Header */
 .trades-table-header {
   height: 24px;
@@ -1070,23 +1094,21 @@ body {
   font-size: 10px;
 }
 
-.match-time {
+.notional-text {
   color: var(--text-muted);
 }
 
-.match-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 9px;
-  color: var(--text-muted);
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
-  padding-top: 4px;
-}
-
-.match-action-hint {
+.audit-link {
   color: var(--accent-cyan);
+  font-size: 9px;
+  font-weight: 600;
   opacity: 0.8;
+  transition: opacity 0.12s ease;
+}
+
+.match-card:hover .audit-link {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 /* Match Stream: Compact Tape Mode */

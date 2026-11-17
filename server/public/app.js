@@ -617,21 +617,16 @@ function renderTradesStream() {
                 MAKER #${t.maker_order_id}
               </span>
             </div>
-            <span class="fifo-badge">FIFO 1ST</span>
+            <span class="match-time">${timeStr}</span>
           </div>
 
           <div class="match-card-body">
             <span class="match-price ${isBuy ? 'text-buy' : 'text-sell'}">$${priceFormatted}</span>
             <div class="match-details">
               <span>${t.amount.toLocaleString()} UNITS</span>
-              <span>$${notionalFormatted}</span>
-              <span class="match-time">${timeStr}</span>
+              <span class="notional-text">$${notionalFormatted}</span>
+              <span class="audit-link">Audit ↗</span>
             </div>
-          </div>
-
-          <div class="match-card-footer">
-            <span>⚡ Matched from Head of PriceLevel queue</span>
-            <span class="match-action-hint">Audit Invariants ↗</span>
           </div>
         </div>
       `;
