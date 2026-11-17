@@ -32,6 +32,21 @@ func (e *Engine) SetWAL(wal *WAL) {
 	}
 }
 
+// Reset clears all order books and resets the sequential order ID counter to 0.
+func (e *Engine) Reset() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	atomic.StoreUint64(&e.nextOrderID, 0)
+	for sym := range e.orderBooks {
+		ob := NewOrderBook(sym)
+		if e.wal != nil {
+			ob.SetWAL(e.wal)
+		}
+		e.orderBooks[sym] = ob
+	}
+}
+
 // NextOrderID generates a monotonically increasing ID. It guarantees
 // uniqueness only among IDs it issues itself; it does not prevent a caller
 // from supplying an explicit order.ID that collides with a value this

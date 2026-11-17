@@ -75,6 +75,7 @@ const ohlcClose = document.getElementById('ohlcClose');
 const ohlcVol = document.getElementById('ohlcVol');
 
 // Simulator & Ticker Elements
+const btnResetMarket = document.getElementById('btnResetMarket');
 const btnToggleBot = document.getElementById('btnToggleBot');
 const botLabel = document.getElementById('botLabel');
 const tickerLastPrice = document.getElementById('tickerLastPrice');
@@ -425,6 +426,8 @@ function handleServerEvent(msg) {
       state.myOrders.splice(idx, 1);
       renderOpenOrders();
     }
+  } else if (msg.type === 'market_reset') {
+    resetLocalMarketState();
   }
 }
 
@@ -973,6 +976,43 @@ async function syncBotStatus() {
   } catch (e) {
     console.error('Failed to sync bot status:', e);
   }
+}
+
+if (btnResetMarket) {
+  btnResetMarket.addEventListener('click', async () => {
+    btnResetMarket.disabled = true;
+    btnResetMarket.textContent = 'RESETTING...';
+    try {
+      const res = await fetch('/simulator/reset', { method: 'POST' });
+      if (res.ok) {
+        resetLocalMarketState();
+      }
+    } catch (e) {
+      console.error('Failed to reset market:', e);
+    } finally {
+      btnResetMarket.disabled = false;
+      btnResetMarket.innerHTML = '<span class="reset-icon">↺</span> RESET MARKET';
+    }
+  });
+}
+
+function resetLocalMarketState() {
+  for (const sym of SYMBOLS) {
+    state.statsBySymbol[sym] = emptyStats();
+    state.recentTrades[sym] = [];
+    candles[sym] = [];
+    const tabPriceEl = document.getElementById(`tabPrice-${sym}`);
+    if (tabPriceEl) tabPriceEl.textContent = '—';
+  }
+  state.myOrders = [];
+  state.earlyMakerFills.clear();
+
+  renderTickerForActiveSymbol();
+  renderTradesStream();
+  renderOpenOrders();
+  updateOHLCHeader();
+  renderPriceChart();
+  fetchOrderBook();
 }
 
 btnToggleBot.addEventListener('click', async () => {

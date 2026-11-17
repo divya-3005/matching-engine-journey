@@ -81,6 +81,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("OPTIONS /order", handleOptions)
 	mux.HandleFunc("OPTIONS /simulator/toggle", handleOptions)
+	mux.HandleFunc("OPTIONS /simulator/reset", handleOptions)
 	mux.HandleFunc("POST /order", requireAllowedOrigin(handlePlaceOrder(eng, hub)))
 	mux.HandleFunc("DELETE /order", requireAllowedOrigin(handleCancelOrder(eng, hub)))
 	mux.HandleFunc("GET /orderbook", handleGetOrderBook(eng))
@@ -91,6 +92,14 @@ func main() {
 		running := sim.Toggle()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]bool{"running": running})
+	}))
+	mux.HandleFunc("POST /simulator/reset", requireAllowedOrigin(func(w http.ResponseWriter, r *http.Request) {
+		if err := sim.ResetMarket(wal); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "market reset complete"})
 	}))
 	mux.HandleFunc("GET /simulator/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -224,6 +224,13 @@ func (h *Hub) RecordTrades(symbol string, trades []*engine.Trade) {
 	h.recentTrades[symbol] = list
 }
 
+// ClearTrades removes all trade execution history across all symbols.
+func (h *Hub) ClearTrades() {
+	h.tradesMu.Lock()
+	defer h.tradesMu.Unlock()
+	h.recentTrades = make(map[string][]*engine.Trade)
+}
+
 // GetRecentTrades returns a copy of the recent trades recorded for a symbol.
 func (h *Hub) GetRecentTrades(symbol string) []*engine.Trade {
 	h.tradesMu.RLock()

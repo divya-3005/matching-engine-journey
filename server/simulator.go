@@ -168,6 +168,41 @@ func (sim *MarketSimulator) IsRunning() bool {
 	return sim.running
 }
 
+// ResetMarket halts the simulator, truncates the WAL, resets engine books and sequence,
+// clears hub trade history, re-seeds fresh liquidity from Order #1, and broadcasts a reset event.
+func (sim *MarketSimulator) ResetMarket(wal *engine.WAL) error {
+	sim.mu.Lock()
+	wasRunning := sim.running
+	if sim.running {
+		close(sim.stop)
+		done := sim.done
+		sim.running = false
+		sim.mu.Unlock()
+		<-done
+	} else {
+		sim.mu.Unlock()
+	}
+
+	if wal != nil {
+		if err := wal.Truncate(); err != nil {
+			return err
+		}
+	}
+
+	sim.eng.Reset()
+	sim.hub.ClearTrades()
+	sim.SeedMarket()
+
+	sim.hub.BroadcastJSON(map[string]interface{}{
+		"type": "market_reset",
+	})
+
+	if wasRunning {
+		sim.Start()
+	}
+	return nil
+}
+
 // loop only ever reads its own stop channel (passed by value), never the sim.stop field.
 func (sim *MarketSimulator) loop(stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)

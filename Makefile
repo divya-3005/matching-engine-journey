@@ -1,4 +1,4 @@
-.PHONY: all build run test bench fuzz latency profile-cpu profile-mem fmt vet clean
+.PHONY: all build run test bench fuzz latency profile-cpu profile-mem fmt vet clean reset
 
 all: build
 
@@ -36,3 +36,7 @@ vet:
 
 clean:
 	rm -rf server/bin server/wal.log wal.log server/*.pprof
+
+reset:
+	@curl -s -X POST http://localhost:8081/simulator/reset || curl -s -X POST http://localhost:8080/simulator/reset
+	@echo "Market reset complete: order sequence and liquidity re-seeded from #1"

@@ -138,6 +138,21 @@ func (w *WAL) append(entry WALEntry) error {
 	return nil
 }
 
+// Truncate clears the log file back to 0 bytes and seeks to start.
+func (w *WAL) Truncate() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.broken = nil
+	w.size = 0
+	if err := w.file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return w.file.Sync()
+}
+
 func (w *WAL) rollback(offset int64) error {
 	if err := w.file.Truncate(offset); err != nil {
 		return err
