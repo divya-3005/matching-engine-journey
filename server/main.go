@@ -105,7 +105,11 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]bool{"running": sim.IsRunning()})
 	})
-	mux.Handle("/", http.FileServer(http.Dir(resolvePublicDir())))
+	fileServer := http.FileServer(http.Dir(resolvePublicDir()))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		fileServer.ServeHTTP(w, r)
+	})
 
 	port := resolvePort()
 	srv := &http.Server{
