@@ -889,6 +889,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
+}
+
+.match-panel-title .panel-title {
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 .engine-subtext {
@@ -896,11 +902,14 @@ body {
   font-size: 9px;
   font-weight: 600;
   color: var(--accent-cyan);
+  white-space: nowrap;
 }
 
 .match-mode-switch {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -918,6 +927,7 @@ body {
   padding: 3px 8px;
   border-radius: 3px;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.12s ease;
 }
 

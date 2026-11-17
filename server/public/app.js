@@ -359,6 +359,8 @@ if (priceCanvas) {
 // --------------------------------------------------------------------------
 // 3. WebSocket Real-Time Client & Event Dispatcher
 // --------------------------------------------------------------------------
+let wsColdStartTimer = null;
+
 function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -366,9 +368,17 @@ function connectWebSocket() {
   wsStatus.className = 'telemetry-pill connecting';
   wsStatus.querySelector('.telemetry-val').textContent = 'CONNECTING';
 
+  clearTimeout(wsColdStartTimer);
+  wsColdStartTimer = setTimeout(() => {
+    if (wsStatus.classList.contains('connecting')) {
+      wsStatus.querySelector('.telemetry-val').textContent = 'WAKING UP SERVER...';
+    }
+  }, 2500);
+
   state.ws = new WebSocket(wsUrl);
 
   state.ws.onopen = () => {
+    clearTimeout(wsColdStartTimer);
     wsStatus.className = 'telemetry-pill online';
     wsStatus.querySelector('.telemetry-val').textContent = 'LIVE FEED';
     fetchOrderBook();
@@ -384,6 +394,7 @@ function connectWebSocket() {
   };
 
   state.ws.onclose = () => {
+    clearTimeout(wsColdStartTimer);
     wsStatus.className = 'telemetry-pill offline';
     wsStatus.querySelector('.telemetry-val').textContent = 'RECONNECTING';
     setTimeout(connectWebSocket, 1500);
@@ -1049,22 +1060,36 @@ window.addEventListener('resize', () => {
 // --------------------------------------------------------------------------
 // 9. Application Bootstrap
 // --------------------------------------------------------------------------
-async function init() {
+function init() {
+  // 1. Immediately initialize form inputs & active terminal views
   updateTotal();
   updateSubmitButton();
-
-  for (const sym of SYMBOLS) {
-    await hydrateTradeHistory(sym);
-  }
-
   renderTickerForActiveSymbol();
   renderTradesStream();
   renderOpenOrders();
   updateOHLCHeader();
-  renderPriceChart();
+  renderPriceChart(); // Instantly paints chart grid and placeholder canvas
 
+  // 2. Fetch resting order book depth immediately via HTTP (don't wait for WebSocket)
+  fetchOrderBook();
+
+  // 3. Connect real-time WebSocket stream immediately
   connectWebSocket();
+
+  // 4. Query live simulator status
   syncBotStatus();
+
+  // 5. Hydrate historical trade flow across all symbols in parallel (non-blocking)
+  Promise.all(SYMBOLS.map(sym => hydrateTradeHistory(sym)))
+    .then(() => {
+      renderTickerForActiveSymbol();
+      renderTradesStream();
+      updateOHLCHeader();
+      renderPriceChart();
+    })
+    .catch(e => {
+      console.error('Failed to hydrate trade histories in background:', e);
+    });
 }
 
 document.addEventListener('DOMContentLoaded', init);
