@@ -171,7 +171,7 @@ func (sim *MarketSimulator) IsRunning() bool {
 // loop only ever reads its own stop channel (passed by value), never the sim.stop field.
 func (sim *MarketSimulator) loop(stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
-	ticker := time.NewTicker(600 * time.Millisecond)
+	ticker := time.NewTicker(1200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
@@ -184,16 +184,7 @@ func (sim *MarketSimulator) loop(stop <-chan struct{}, done chan<- struct{}) {
 }
 
 func (sim *MarketSimulator) step() {
-	var activeSymbols []string
-	for _, sym := range supportedSymbols {
-		if _, exists := sim.eng.GetOrderBook(sym); exists {
-			activeSymbols = append(activeSymbols, sym)
-		}
-	}
-	if len(activeSymbols) == 0 {
-		return
-	}
-	symbol := activeSymbols[rand.Intn(len(activeSymbols))]
+	symbol := supportedSymbols[rand.Intn(len(supportedSymbols))]
 	ob, exists := sim.eng.GetOrderBook(symbol)
 	if !exists {
 		return
@@ -205,61 +196,42 @@ func (sim *MarketSimulator) step() {
 		return
 	}
 
-	// 70% Limit orders, 30% Market orders
-	isMarket := rand.Float32() < 0.30
-	side := engine.Side(rand.Intn(2))
-	qty := uint64(1 + rand.Intn(8))
-
-	maxOffset := int(tickSize(symbol) * 3)
-	if maxOffset < 1 {
-		maxOffset = 30
-	}
-
-	var price uint64
 	step := tickSize(symbol)
-	spread := uint64(0)
-	if bestAsk > bestBid {
-		spread = bestAsk - bestBid
-	}
+	side := engine.Side(rand.Intn(2))
+	qty := uint64(1 + rand.Intn(6))
 
-	if spread > 2*step {
-		// When the spread is abnormally wide, quote inside the spread to tighten it
-		isMarket = false
+	var orderType engine.OrderType
+	var price uint64
+
+	// 1. If spread is wider than 2 ticks, tighten it with a limit order inside the spread
+	if bestAsk > bestBid+2*step {
+		orderType = engine.Limit
 		if side == engine.Buy {
 			price = bestBid + step
 		} else {
 			price = bestAsk - step
 		}
-	} else if side == engine.Buy {
-		// Buy near best ask to trigger trade, or replenish inside/near spread to add liquidity
-		if isMarket || rand.Float32() < 0.4 {
+	} else if rand.Float32() < 0.45 {
+		// 2. 45% Taker orders: cross the spread to trigger an immediate FIFO match
+		orderType = engine.Market
+		if side == engine.Buy {
 			price = bestAsk
-		} else if spread > step && rand.Float32() < 0.5 {
-			// Step inside spread to maintain healthy liquidity
-			price = bestBid + step
 		} else {
-			offset := uint64(rand.Intn(maxOffset))
+			price = bestBid
+		}
+	} else {
+		// 3. 55% Maker orders: replenish resting liquidity 0 to 2 ticks from the spread
+		orderType = engine.Limit
+		offset := uint64(rand.Intn(3)) * step
+		if side == engine.Buy {
 			if bestBid > offset {
 				price = bestBid - offset
 			} else {
-				price = 1 // prevents uint64 underflow
+				price = 1
 			}
-		}
-	} else {
-		// Sell near best bid to trigger trade, or replenish inside/near spread to add liquidity
-		if isMarket || rand.Float32() < 0.4 {
-			price = bestBid
-		} else if spread > step && rand.Float32() < 0.5 {
-			// Step inside spread to maintain healthy liquidity
-			price = bestAsk - step
 		} else {
-			price = bestAsk + uint64(rand.Intn(maxOffset))
+			price = bestAsk + offset
 		}
-	}
-
-	orderType := engine.Limit
-	if isMarket {
-		orderType = engine.Market
 	}
 
 	order := &engine.Order{
