@@ -1,16 +1,9 @@
 package engine
 
 // PriceLevel represents a FIFO queue of orders resting at a specific price point.
-//
-// Engineering Design Note (Intrusive Doubly Linked List):
-// Standard queue implementations (such as Go's container/list or slice queues)
-// either incur extra heap allocations per node or require O(N) linear scans
-// for arbitrary mid-queue cancellations.
-//
-// By embedding Prev and Next pointers directly inside the Order struct (an intrusive DLL):
-// 1. AddOrder (Enqueue to Tail): O(1) time, 0 extra heap allocations.
-// 2. Head Match (Dequeue from Head): O(1) time.
-// 3. CancelOrder (Unlink by ID): O(1) time using the Order reference from ob.Orders map.
+// Orders form an intrusive doubly linked list (Prev and Next pointers directly on Order)
+// to guarantee O(1) enqueues to the tail, O(1) matching from the head, and O(1) mid-queue
+// cancellations without auxiliary node allocations.
 type PriceLevel struct {
 	Price       uint64 // Price in fixed-point cents/ticks
 	TotalVolume uint64 // Aggregate shares available at this level

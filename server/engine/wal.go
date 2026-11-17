@@ -13,20 +13,10 @@ import (
 	"sync"
 )
 
-// Write-Ahead Logging (WAL) Module
-//
-// Engineering Design Note (Durability & Fault Tolerance):
-// To achieve ACID Durability without sacrificing in-memory matching speed,
-// every order placement and cancellation is serialized as a line-delimited
-// JSON record and flushed to persistent storage via fsync() BEFORE the in-memory
-// order book state is modified.
-//
-// Crash Recovery Guarantee:
-// On engine restart, Recover() sequentially replays all valid records to
-// reconstruct the exact state of all order books deterministically.
-// If an ungraceful crash interrupted a write (creating an incomplete or
-// unacknowledged final record), it is safely truncated, and the engine
-// resumes normal operations without data corruption.
+// WAL manages append-only Write-Ahead Logging with synchronous fsync persistence.
+// Order placements and cancellations are committed to disk before in-memory state mutation.
+// On startup, Recover() replays all valid records to deterministically reconstruct state,
+// pruning unacknowledged or torn trailing records from unexpected termination.
 
 // WALEntry represents a single logged event in the Write-Ahead Log.
 type WALEntry struct {

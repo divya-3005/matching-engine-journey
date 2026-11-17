@@ -17,11 +17,9 @@ const (
 )
 
 // Order represents an order placed by a participant in the market.
-//
-// Engineering Note:
-// All prices and amounts use fixed-point uint64 (cents/ticks) to guarantee
-// exact arithmetic without IEEE-754 floating-point rounding errors.
-// Prev and Next pointers form an intrusive doubly linked list inside PriceLevel.
+// Prices and amounts use fixed-point uint64 (cents/ticks) to guarantee
+// exact arithmetic without floating-point rounding errors. Prev and Next
+// pointers form an intrusive doubly linked list inside PriceLevel.
 type Order struct {
 	ID        uint64    `json:"id"`
 	TraderID  uint64    `json:"trader_id,omitempty"` // Participant account ID for Self-Trade Prevention (STP)
