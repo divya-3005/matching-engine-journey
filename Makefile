@@ -38,5 +38,5 @@ clean:
 	rm -rf server/bin server/wal.log wal.log server/*.pprof
 
 reset:
-	@curl -s -X POST http://localhost:8081/simulator/reset || curl -s -X POST http://localhost:8080/simulator/reset
+	@curl -s -f -X POST http://localhost:8081/simulator/reset 2>/dev/null || curl -s -f -X POST http://localhost:8080/simulator/reset 2>/dev/null || (echo "Error: Server is not running on port 8080 or 8081. Start the server with 'make run' first." && exit 1)
 	@echo "Market reset complete: order sequence and liquidity re-seeded from #1"

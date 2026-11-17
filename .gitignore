@@ -19,4 +19,8 @@ bin/
 *.swo
 .DS_Store
 *.log
+*.pprof
+matching-engine
+bin/
+server/bin/
 server/server

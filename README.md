@@ -120,8 +120,8 @@ Every fuzz iteration asserts four strict financial and structural invariants:
 ## Project Structure
 
 ```
-OME/
-├── Makefile                # Unified build, test, benchmark, fuzz, and profiling targets
+matching-engine-journey/
+├── Makefile                # Unified build, test, benchmark, fuzz, profiling, and reset targets
 ├── LICENSE                 # MIT License
 ├── README.md               # Technical whitepaper & operational guide
 ├── render.yaml             # Cloud deployment specification
@@ -161,24 +161,29 @@ make build
 # Start the server and trading terminal
 make run
 ```
-Open **[http://localhost:8080](http://localhost:8080)** to access the live trading dashboard.
+Open **[http://localhost:8080](http://localhost:8080)** to access the live trading dashboard. *(Note: If port 8080 is in use by system services such as macOS AirPlay, the server automatically falls back to **http://localhost:8081**).*
 
-### 2. Run Comprehensive Test Suite with Race Detector
+### 2. Run Engine Benchmarks (Throughput & WAL Persistence)
+```bash
+make bench
+```
+
+### 3. Run Comprehensive Test Suite with Race Detector
 ```bash
 make test
 ```
 
-### 3. Run Property-Based Invariant Fuzzing
+### 4. Run Property-Based Invariant Fuzzing
 ```bash
 make fuzz
 ```
 
-### 4. Measure Real-Time Latency Percentiles (p50, p90, p99, p99.9)
+### 5. Measure Real-Time Latency Percentiles (p50, p90, p99, p99.9)
 ```bash
 make latency
 ```
 
-### 5. Profile CPU & Memory Allocation Hotspots
+### 6. Profile CPU & Memory Allocation Hotspots
 ```bash
 # Generate CPU pprof profile
 make profile-cpu
@@ -189,6 +194,36 @@ make profile-mem
 go tool pprof -top server/mem.pprof
 ```
 
+### 7. Reset Market Simulation & Order Sequence
+```bash
+make reset
+```
+Atomically resets all symbol order books, truncates the WAL, and restarts the order sequence counter cleanly from `#1`.
+
+### 8. Clean Build Artifacts & Profiles
+```bash
+make clean
+```
+
+---
+
+## Institutional Trading Terminal & Match Engine Audit
+
+The web frontend (`server/public/`) provides a full-featured institutional trading dashboard backed by the real-time WebSocket feed:
+
+1. **Live L2 Depth Chart & Candlesticks**:
+   - HTML5 Canvas cumulative bid/ask volume area charts updated on every matching cycle.
+   - Price-Time candlesticks with interactive volume histograms and spread metrics.
+
+2. **Real-Time Match Engine Audit Feed**:
+   - **Order-to-Order Linkage**: Displays exact trade pairings (`#Taker [BUY/SELL] ➔ #Maker [RESTING]`), execution price, volume, and total notional value in USD.
+   - **FIFO Priority Guarantee**: A single guarantee banner atop the audit panel reinforces the core engine invariant: `FIFO PRIORITY: Dequeued from PriceLevel Head (O(1))`.
+   - **Order Book Depth Flash Pulse**: Maker order executions trigger immediate visual pulse highlights directly inside the resting L2 order book rows.
+
+3. **Interactive Simulator Controls**:
+   - **Pause / Resume**: Toggle live institutional background order flow with a single click.
+   - **Reset Market**: Clear resting books, truncate the WAL log, and re-seed clean institutional market liquidity starting at order `#1`.
+
 ---
 
 ## API Reference
@@ -196,7 +231,7 @@ go tool pprof -top server/mem.pprof
 ### 1. Submit an Order
 `POST /order`
 ```bash
-# Limit Buy: 10 AAPL @ $150.00 (price in cents: 15000)
+# Limit Buy: 10 AAPL @ $150.00 (price in cents: 15000, optional trader_id: 101)
 curl -X POST http://localhost:8080/order \
   -H "Content-Type: application/json" \
   -d '{
@@ -204,7 +239,8 @@ curl -X POST http://localhost:8080/order \
     "side": 0,
     "type": 0,
     "price": 15000,
-    "amount": 10
+    "amount": 10,
+    "trader_id": 101
   }'
 
 # Market Buy: 5 AAPL (immediate execution against resting asks)
@@ -219,16 +255,61 @@ curl -X POST http://localhost:8080/order \
 ```
 *Note: `side: 0` = Buy, `side: 1` = Sell. `type: 0` = Limit, `type: 1` = Market. Order IDs and timestamps are assigned server-side.*
 
+#### Example Response:
+```json
+{
+  "order": {
+    "id": 15,
+    "symbol": "AAPL",
+    "side": 0,
+    "type": 0,
+    "price": 15000,
+    "amount": 10,
+    "timestamp": 1710000000000
+  },
+  "trades": [
+    {
+      "id": 8,
+      "symbol": "AAPL",
+      "maker_order_id": 3,
+      "taker_order_id": 15,
+      "price": 15000,
+      "amount": 10,
+      "timestamp": 1710000000000
+    }
+  ],
+  "requested_amount": 10,
+  "filled_amount": 10,
+  "remaining_amount": 0,
+  "status": "FILLED"
+}
+```
+
 ### 2. Cancel a Resting Order
 `DELETE /order?symbol=AAPL&id=1`
 ```bash
 curl -X DELETE "http://localhost:8080/order?symbol=AAPL&id=1"
+```
+#### Example Response:
+```json
+{
+  "success": true,
+  "order_id": 1
+}
 ```
 
 ### 3. Query L2 Order Book Depth
 `GET /orderbook?symbol=AAPL`
 ```bash
 curl "http://localhost:8080/orderbook?symbol=AAPL"
+```
+#### Example Response:
+```json
+{
+  "symbol": "AAPL",
+  "bids": [{"price": 14950, "volume": 120}],
+  "asks": [{"price": 15050, "volume": 85}]
+}
 ```
 
 ### 4. Query Execution History
@@ -242,6 +323,19 @@ curl "http://localhost:8080/trades?symbol=AAPL&limit=50"
 ```bash
 curl "http://localhost:8080/orders?symbol=AAPL"
 ```
+
+### 6. Real-Time WebSocket Market Data Stream
+`GET /ws` (or `ws://localhost:8080/ws`)
+
+Upgrades HTTP connection to WebSocket. Automatically receives real-time JSON frames:
+- `trades`: Broadcast upon execution of any trade.
+- `order_cancelled`: Broadcast upon resting order cancellation.
+- `book_update`: Broadcast when liquidity shifts or fills alter resting levels.
+
+### 7. Market Simulator Controls
+- `POST /simulator/toggle`: Toggle simulated order flow on/off (`{"running": false}`).
+- `POST /simulator/reset`: Atomically flush books, truncate WAL, and re-seed order sequence starting at `#1`.
+- `GET /simulator/status`: Query active simulator state (`{"running": true}`).
 
 ---
 
