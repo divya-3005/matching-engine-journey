@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,6 +27,18 @@ func resolvePublicDir() string {
 		return "./server/public"
 	}
 	return "./public"
+}
+
+func resolvePort() string {
+	if p := os.Getenv("PORT"); p != "" {
+		return p
+	}
+	l, err := net.Listen("tcp4", ":8080")
+	if err == nil {
+		l.Close()
+		return "8080"
+	}
+	return "8081"
 }
 
 func resolveWALPath() string {
@@ -85,10 +98,7 @@ func main() {
 	})
 	mux.Handle("/", http.FileServer(http.Dir(resolvePublicDir())))
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	port := resolvePort()
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
