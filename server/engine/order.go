@@ -24,6 +24,7 @@ const (
 // Prev and Next pointers form an intrusive doubly linked list inside PriceLevel.
 type Order struct {
 	ID        uint64    `json:"id"`
+	TraderID  uint64    `json:"trader_id,omitempty"` // Participant account ID for Self-Trade Prevention (STP)
 	Symbol    string    `json:"symbol"`
 	Side      Side      `json:"side"`      // 0 = Buy, 1 = Sell
 	Type      OrderType `json:"type"`      // 0 = Limit, 1 = Market

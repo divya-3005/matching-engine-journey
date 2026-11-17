@@ -17,14 +17,14 @@ Most open-source matching engines are either simplistic educational exercises re
 ```bash
 pkg: github.com/divya-3005/OME/server/engine
 cpu: Apple M3
-BenchmarkProcessOrder-8          	 2915558	       413.5 ns/op	     335 B/op	       4 allocs/op
-BenchmarkProcessOrderWithWAL-8   	     214	   5780523 ns/op	     553 B/op	       8 allocs/op
+BenchmarkProcessOrder-8          	 3714324	       346.2 ns/op	     316 B/op	       4 allocs/op
+BenchmarkProcessOrderWithWAL-8   	     252	   4023786 ns/op	     600 B/op	       8 allocs/op
 ```
 
-- **In-Memory Matching Throughput**: **~2.92M matching cycles/sec** ($\approx \mathbf{5.84M\text{ orders/sec}}$), where each benchmark cycle processes an aggressive crossing limit order and a replenishing counter-order.
-- **Mean Single-Order Latency**: **~206.8 ns**.
-- **Heap Allocations**: **4 allocs / cycle** ($1$ `Order` struct per order, $1$ `Trade` struct + slice backing array per execution). The intrusive doubly linked list introduces **0 auxiliary node allocations**.
-- **WAL Persistence Throughput**: $\approx 5.78\text{ ms/op}$ with synchronous atomic disk `fsync` per transaction on physical NVMe storage.
+- **In-Memory Matching Throughput**: **~2.89M matching cycles/sec** ($\approx \mathbf{5.77M\text{ orders/sec}}$), where each benchmark cycle processes an aggressive crossing limit order and a replenishing counter-order.
+- **Mean Single-Order Latency**: **~173.1 ns**.
+- **Heap Allocations**: **4 allocs / cycle** (316 B/op $\approx 158$ B/order). The intrusive doubly linked list introduces **0 auxiliary node allocations**.
+- **WAL Persistence Throughput**: $\approx 4.02\text{ ms/op}$ with synchronous atomic disk `fsync` per transaction on physical NVMe storage.
 
 ### 2. Tail Latency Distribution ($N = 100,000$ live samples)
 
@@ -98,6 +98,10 @@ A slow WebSocket consumer (e.g., a laggy browser client) must never degrade matc
 - Each client maintains an isolated `writePump` with a 256-event buffered channel (`chan []byte`).
 - Broadcasts use non-blocking channel selects. If a client buffer saturates, the hub drops the slow connection rather than applying backpressure to the matching engine.
 - WebSocket payloads deliver exactly one atomic JSON event per frame (`TextMessage`).
+
+### 7. Self-Trade Prevention (STP) & Bounded Deduplication
+- **Wash Trading Mitigation**: Orders support optional participant tagging (`TraderID`). When matching an aggressive order against resting liquidity, if maker and taker share the same non-zero `TraderID`, Self-Trade Prevention (Cancel-Taker) cancels the aggressor to prevent illegal wash trades.
+- **Constant-Memory Deduplication**: Unbounded lifetime order ID maps leak memory over time. OME uses a sliding-window FIFO eviction ring (`maxSeenOrders = 200,000`) paired with an $O(1)$ set, guaranteeing strict duplicate rejection without linear memory growth.
 
 ---
 

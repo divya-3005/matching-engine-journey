@@ -482,6 +482,75 @@ func TestGetOpenOrders(t *testing.T) {
 	}
 }
 
+func TestSelfTradePrevention(t *testing.T) {
+	ob := NewOrderBook("AAPL")
+
+	// 1. Trader 42 places a resting sell of 10 shares @ $100
+	aliceSell := &Order{
+		ID:        1,
+		TraderID:  42,
+		Symbol:    "AAPL",
+		Side:      Sell,
+		Type:      Limit,
+		Price:     100,
+		Amount:    10,
+		Timestamp: time.Now().UnixMilli(),
+	}
+	if _, err := ob.ProcessOrder(aliceSell); err != nil {
+		t.Fatalf("failed placing aliceSell: %v", err)
+	}
+
+	// 2. Different participant (Trader 99) buys 4 shares @ $100 -> must match
+	bobBuy := &Order{
+		ID:        2,
+		TraderID:  99,
+		Symbol:    "AAPL",
+		Side:      Buy,
+		Type:      Limit,
+		Price:     100,
+		Amount:    4,
+		Timestamp: time.Now().UnixMilli(),
+	}
+	trades, err := ob.ProcessOrder(bobBuy)
+	if err != nil || len(trades) != 1 || trades[0].Amount != 4 {
+		t.Fatalf("expected Bob's trade to execute 4 shares, got trades=%v err=%v", trades, err)
+	}
+
+	// Alice should have 6 shares remaining
+	if ob.Orders[1].Amount != 6 {
+		t.Fatalf("expected Alice to have 6 shares left, got %d", ob.Orders[1].Amount)
+	}
+
+	// 3. Same participant (Trader 42) submits an aggressive buy @ $100 -> Self-Trade Prevention must trigger!
+	aliceBuy := &Order{
+		ID:        3,
+		TraderID:  42, // Same trader ID
+		Symbol:    "AAPL",
+		Side:      Buy,
+		Type:      Limit,
+		Price:     100,
+		Amount:    6,
+		Timestamp: time.Now().UnixMilli(),
+	}
+	stpTrades, err := ob.ProcessOrder(aliceBuy)
+	if err != nil {
+		t.Fatalf("unexpected error on STP order: %v", err)
+	}
+	if len(stpTrades) != 0 {
+		t.Fatalf("STP violation: order matched against same TraderID! Generated trades: %v", stpTrades)
+	}
+
+	// Alice's resting sell order must still have 6 shares intact
+	if ob.Orders[1].Amount != 6 {
+		t.Fatalf("resting order volume should remain intact after STP, got %d", ob.Orders[1].Amount)
+	}
+
+	// Alice's buy order should NOT rest on the book (Cancel-Taker policy)
+	if _, exists := ob.Orders[3]; exists {
+		t.Fatalf("STP taker order should not be resting on the book")
+	}
+}
+
 // TestOrderLatencyDistribution samples 100,000 matching cycles to calculate the true
 // latency distribution (p50, p90, p99, p99.9). Financial systems demand predictable tail
 // latency, not just mean averages that hide GC or lock spikes.

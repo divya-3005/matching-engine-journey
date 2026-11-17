@@ -13,6 +13,9 @@ type PriceLevelSummary struct {
 	Volume uint64 `json:"volume"`
 }
 
+// maxSeenOrders bounds the sliding window deduplication set to prevent linear memory leaks.
+const maxSeenOrders = 200_000
+
 // OrderBook manages all bids, asks, and order lookups for a single symbol.
 // It is protected by an internal RWMutex to ensure thread-safe concurrent access.
 type OrderBook struct {
@@ -25,7 +28,8 @@ type OrderBook struct {
 
 	// Quick lookups
 	Orders     map[uint64]*Order   // OrderID -> *Order for O(1) cancellations
-	seenOrders map[uint64]struct{} // Lifetime order IDs seen by this book
+	seenOrders map[uint64]struct{} // Deduplication set bounded by maxSeenOrders
+	seenQueue  []uint64            // Sliding window FIFO queue for O(1) eviction
 	wal        *WAL                // Optional Write-Ahead Log for crash resilience
 }
 
@@ -37,7 +41,19 @@ func NewOrderBook(symbol string) *OrderBook {
 		Asks:       make([]*PriceLevel, 0),
 		Orders:     make(map[uint64]*Order),
 		seenOrders: make(map[uint64]struct{}),
+		seenQueue:  make([]uint64, 0, 1024),
 	}
+}
+
+// recordSeen tracks an order ID while evicting the oldest ID when maxSeenOrders is exceeded.
+func (ob *OrderBook) recordSeen(id uint64) {
+	if len(ob.seenOrders) >= maxSeenOrders && len(ob.seenQueue) > 0 {
+		oldest := ob.seenQueue[0]
+		ob.seenQueue = ob.seenQueue[1:]
+		delete(ob.seenOrders, oldest)
+	}
+	ob.seenOrders[id] = struct{}{}
+	ob.seenQueue = append(ob.seenQueue, id)
 }
 
 // SetWAL configures Write-Ahead Logging on this OrderBook.
@@ -99,6 +115,12 @@ func (ob *OrderBook) matchBuyOrder(order *Order) []*Trade {
 		currMaker := bestAsk.Head
 		for currMaker != nil && order.Amount > 0 {
 			nextMaker := currMaker.Next
+
+			// Self-Trade Prevention (STP - Cancel Taker): Prevent wash trading if non-zero trader IDs match.
+			if order.TraderID != 0 && currMaker.TraderID != 0 && order.TraderID == currMaker.TraderID {
+				order.Amount = 0
+				break
+			}
 
 			// Calculate how much can trade
 			tradeAmount := order.Amount
@@ -168,6 +190,12 @@ func (ob *OrderBook) matchSellOrder(order *Order) []*Trade {
 		currMaker := bestBid.Head
 		for currMaker != nil && order.Amount > 0 {
 			nextMaker := currMaker.Next
+
+			// Self-Trade Prevention (STP - Cancel Taker): Prevent wash trading if non-zero trader IDs match.
+			if order.TraderID != 0 && currMaker.TraderID != 0 && order.TraderID == currMaker.TraderID {
+				order.Amount = 0
+				break
+			}
 
 			tradeAmount := order.Amount
 			if currMaker.Amount < tradeAmount {
@@ -260,7 +288,7 @@ func (ob *OrderBook) ProcessOrder(order *Order) ([]*Trade, error) {
 		return nil, err
 	}
 
-	ob.seenOrders[order.ID] = struct{}{}
+	ob.recordSeen(order.ID)
 
 	if ob.wal != nil {
 		if err := ob.wal.LogPlace(order); err != nil {
