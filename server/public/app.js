@@ -256,8 +256,8 @@ function renderPriceChart() {
   list.forEach((c, idx) => {
     const x = (startSlot + idx) * slotW + slotW / 2;
     const isBull = c.close >= c.open;
-    const color = isBull ? '#00f090' : '#ff3358';
-    const volColor = isBull ? 'rgba(0, 240, 144, 0.22)' : 'rgba(255, 51, 88, 0.22)';
+    const color = isBull ? '#00dc82' : '#ff4365';
+    const volColor = isBull ? 'rgba(0, 220, 130, 0.22)' : 'rgba(255, 67, 101, 0.22)';
 
     // Volume Bar
     const vBarH = Math.max(1, (c.volume / maxVol) * volH);
@@ -297,7 +297,7 @@ function renderPriceChart() {
   // 3. Live Price Line & Glowing Badge
   const lastCandle = list[list.length - 1];
   const lastY = priceToY(lastCandle.close);
-  const liveColor = lastCandle.close >= lastCandle.open ? '#00f090' : '#ff3358';
+  const liveColor = lastCandle.close >= lastCandle.open ? '#00dc82' : '#ff4365';
 
   ctx.strokeStyle = liveColor;
   ctx.setLineDash([4, 4]);
@@ -453,11 +453,11 @@ function drawDepthChart(bids, asks) {
     ctx.lineTo(0, drawH);
     ctx.closePath();
     const bidGrad = ctx.createLinearGradient(0, 0, 0, drawH);
-    bidGrad.addColorStop(0, 'rgba(0, 240, 144, 0.28)');
-    bidGrad.addColorStop(1, 'rgba(0, 240, 144, 0.01)');
+    bidGrad.addColorStop(0, 'rgba(0, 220, 130, 0.28)');
+    bidGrad.addColorStop(1, 'rgba(0, 220, 130, 0.01)');
     ctx.fillStyle = bidGrad;
     ctx.fill();
-    ctx.strokeStyle = '#00f090';
+    ctx.strokeStyle = '#00dc82';
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -476,11 +476,11 @@ function drawDepthChart(bids, asks) {
     ctx.lineTo(width, drawH);
     ctx.closePath();
     const askGrad = ctx.createLinearGradient(0, 0, 0, drawH);
-    askGrad.addColorStop(0, 'rgba(255, 51, 88, 0.28)');
-    askGrad.addColorStop(1, 'rgba(255, 51, 88, 0.01)');
+    askGrad.addColorStop(0, 'rgba(255, 67, 101, 0.28)');
+    askGrad.addColorStop(1, 'rgba(255, 67, 101, 0.01)');
     ctx.fillStyle = askGrad;
     ctx.fill();
-    ctx.strokeStyle = '#ff3358';
+    ctx.strokeStyle = '#ff4365';
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -544,7 +544,7 @@ function drawDepthChart(bids, asks) {
       const boxX = Math.max(10, Math.min(width - txtW - 10, x - txtW / 2));
       const boxY = Math.max(10, y - 28);
       ctx.fillStyle = '#0f172a';
-      ctx.strokeStyle = onBidSide ? '#00f090' : '#ff3358';
+      ctx.strokeStyle = onBidSide ? '#00dc82' : '#ff4365';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, txtW, 20, 4);
@@ -690,7 +690,7 @@ function connectWebSocket() {
   };
 
   state.ws.onclose = () => {
-    wsStatus.innerHTML = '<span class="dot" style="background:#ff3358"></span><span class="telemetry-val">RECONNECTING...</span>';
+    wsStatus.innerHTML = '<span class="dot" style="background:#ff4365"></span><span class="telemetry-val">RECONNECTING...</span>';
     setTimeout(connectWebSocket, 2000);
   };
 }
