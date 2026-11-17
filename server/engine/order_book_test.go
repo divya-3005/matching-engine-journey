@@ -480,4 +480,3 @@ func TestGetOpenOrders(t *testing.T) {
 		t.Fatalf("expected ok=false for unknown symbol open orders")
 	}
 }
-

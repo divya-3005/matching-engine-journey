@@ -335,5 +335,3 @@ func TestWALCreatesParentDirectories(t *testing.T) {
 		t.Fatalf("failed to log order in nested WAL: %v", err)
 	}
 }
-
-

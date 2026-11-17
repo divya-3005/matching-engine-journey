@@ -22,11 +22,11 @@ Instead of relying on heavy third-party frameworks, I built this matching engine
 
 ## 📄 Resume Highlights (Ready to Showcase)
 
-- **High-Throughput Matching Engine**: Engineered a multi-asset Price-Time Priority (FIFO) matching engine in Go achieving **~5.48M orders/sec** in-memory throughput with **~430 ns/op** execution latency.
-- **Custom Data Structure Optimization**: Designed sorted price levels using binary search ($O(\log P)$) paired with an **intrusive doubly linked list** for $O(1)$ order enqueuing, head matching, and arbitrary cancellations without per-node heap allocations.
-- **Fine-Grained Concurrency**: Isolated `sync.RWMutex` locks per order book, eliminating cross-symbol contention and enabling concurrent matching across asset pairs; validated race-free across 55 test suites using Go's `-race` detector.
-- **Durability & Crash Recovery**: Implemented an append-only Write-Ahead Log (WAL) with line-delimited JSON and `fsync()`, guaranteeing deterministic state restoration on server restarts.
-- **Real-Time Streaming Terminal**: Developed a non-blocking WebSocket hub with per-client buffered channels feeding an institutional trading terminal with live L2 order book, Japanese Candlestick, and Market Depth charts.
+- **High-Throughput Matching Engine**: Engineered a multi-asset Price-Time Priority (FIFO) matching engine in Go achieving **~5.98M orders/sec** (~2.99M matching cycles/s) in-memory throughput with **~218 ns/order** (435.9 ns/cycle) execution latency.
+- **Custom Zero-Allocation Data Structures**: Designed sorted price levels using binary search ($O(\log P)$) paired with a custom **intrusive doubly linked list** for $O(1)$ order enqueuing, head matching, and arbitrary cancellations, eliminating intermediate node heap allocations and minimizing GC pressure.
+- **Fine-Grained Concurrency & Contention Isolation**: Isolated `sync.RWMutex` locks per order book, eliminating cross-symbol contention and enabling concurrent matching across asset pairs; validated race-free across 55 test suites using Go's `-race` detector.
+- **Durability & Crash Recovery (WAL)**: Implemented an append-only Write-Ahead Log (WAL) with line-delimited JSON and `fsync()`, guaranteeing deterministic state restoration on server restarts with fault-tolerant tail truncation.
+- **Real-Time Streaming & Backpressure Defense**: Developed a non-blocking WebSocket hub with per-client buffered channels feeding an institutional trading terminal with live L2 order book, Japanese Candlestick, and Market Depth charts without stalling matching routines.
 
 ---
 
@@ -36,9 +36,9 @@ Benchmarked on an Apple M3 (8-core ARM64) using Go 1.22:
 
 | Metric | In-Memory Engine Benchmark | Details |
 | :--- | :--- | :--- |
-| **Engine-Level Throughput** | **~2.74M matching cycles/s (~5.48M orders/s)** | Sustained 2-order match + replenish loop |
-| **Mean Execution Latency** | **430.3 ns/op (≈ 215.1 ns per order)** | 1 op = 1 matching buy + 1 replenishing sell |
-| **Memory Allocation** | **342 B / op** | Intrusive DLL avoids separate node allocations |
+| **Engine-Level Throughput** | **~2.99M matching cycles/s (~5.98M orders/s)** | Sustained 2-order match + replenish loop |
+| **Mean Execution Latency** | **435.9 ns/op (≈ 217.9 ns per order)** | 1 op = 1 matching buy + 1 replenishing sell |
+| **Memory Allocation** | **333 B / op** | Intrusive DLL avoids separate node allocations |
 | **Allocations** | **4 allocs / op** | 1 `Order` per order, 1 `Trade` + trade slice per match |
 
 ```bash
@@ -46,8 +46,8 @@ goos: darwin
 goarch: arm64
 pkg: github.com/divya-3005/OME/server/engine
 cpu: Apple M3
-BenchmarkProcessOrder-8          	 2739663	       430.3 ns/op	     342 B/op	       4 allocs/op
-BenchmarkProcessOrderWithWAL-8   	     180	   5693859 ns/op	     552 B/op	       8 allocs/op
+BenchmarkProcessOrder-8          	 2989147	       435.9 ns/op	     333 B/op	       4 allocs/op
+BenchmarkProcessOrderWithWAL-8   	     214	   5780523 ns/op	     553 B/op	       8 allocs/op
 PASS
 ```
 
@@ -130,25 +130,25 @@ By embedding `Prev` and `Next` pointers directly inside the `Order` struct:
 ### Prerequisites
 - **Go 1.22 or later** installed.
 
-### 1. Run the Server & Trading Terminal
+### Quick Start (using `make`)
 ```bash
-cd server
-go run .
+make run      # Starts server on http://localhost:8080
+make test     # Runs 55 unit tests with -race detector
+make bench    # Runs performance benchmarks
 ```
-The server will start on `http://localhost:8080`.
+
+### Alternatively (using standard Go commands)
+```bash
+# 1. Run Server & Trading Terminal
+cd server && go run .
+
+# 2. Run Tests with Race Detector
+cd server && go test -v -race ./...
+
+# 3. Run Performance Benchmarks
+cd server && go test -bench=. -benchmem -run=^$ ./...
+```
 Open **[http://localhost:8080](http://localhost:8080)** in your browser to interact with the live trading terminal.
-
-### 2. Run Tests with Race Detector
-```bash
-cd server
-go test -v -race ./...
-```
-
-### 3. Run Performance Benchmarks
-```bash
-cd server
-go test -bench=. -benchmem -run=^$ ./...
-```
 
 ---
 

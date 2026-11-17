@@ -226,4 +226,3 @@ func TestSimulatorNarrowsWideSpread(t *testing.T) {
 		t.Fatalf("expected spread to narrow from 2000, got spread=%d (bid=%d, ask=%d)", spread, bid, ask)
 	}
 }
-

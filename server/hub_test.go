@@ -395,5 +395,3 @@ func TestHubRecentTrades(t *testing.T) {
 		t.Fatalf("expected 0 trades for TSLA, got %d", len(tslaTrades))
 	}
 }
-
-

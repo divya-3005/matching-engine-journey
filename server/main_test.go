@@ -791,6 +791,3 @@ func TestCancelOrderWALFailureReturns503(t *testing.T) {
 		t.Fatalf("expected 503 on WAL failure during cancel, got %d", rec.Code)
 	}
 }
-
-
-
