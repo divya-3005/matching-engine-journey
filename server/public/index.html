@@ -229,25 +229,96 @@
       </div>
     </section>
 
-    <!-- RIGHT COLUMN: Real-Time Execution Tape -->
+    <!-- RIGHT COLUMN: Real-Time Match Audit & Execution Tape -->
     <section class="panel trades-panel">
       <div class="panel-header">
-        <span class="panel-title">RECENT EXECUTIONS</span>
-        <span class="live-tag"><span class="pulse-dot"></span> LIVE TAPE</span>
+        <div class="match-panel-title">
+          <span class="panel-title">MATCH ENGINE AUDIT</span>
+          <span class="engine-subtext">TAKER ➔ MAKER FIFO</span>
+        </div>
+        <div class="match-mode-switch">
+          <button class="mode-tab active" id="btnModeAudit" title="Visual Order-to-Order Match Cards">CARDS</button>
+          <button class="mode-tab" id="btnModeTape" title="Compact Execution Tape">TAPE</button>
+        </div>
       </div>
 
-      <div class="trades-table-header">
-        <span>PRICE (USD)</span>
+      <div class="trades-table-header" id="tradesTableHeader" style="display: none;">
+        <span>TAKER ➔ MAKER</span>
+        <span>PRICE</span>
         <span>SIZE</span>
         <span>TIME</span>
       </div>
 
-      <div class="trades-stream" id="tradesStream">
+      <div class="trades-stream audit-mode" id="tradesStream">
         <div class="empty-state">Waiting for executions...</div>
       </div>
     </section>
 
   </main>
+
+  <!-- Interactive Match Audit Inspection Modal -->
+  <div class="modal-backdrop" id="matchModalBackdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">ORDER MATCH AUDIT</span>
+          <span class="modal-title" id="modalTradeTitle">Taker #— ➔ Maker #—</span>
+        </div>
+        <button class="modal-close" id="modalCloseBtn" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="match-flow-diagram">
+          <div class="flow-card taker-flow" id="modalTakerBox">
+            <span class="flow-role">AGGRESSOR (TAKER)</span>
+            <span class="flow-id" id="modalTakerId">Order #—</span>
+            <span class="flow-badge" id="modalTakerSideBadge">BUY</span>
+            <span class="flow-desc">Crossed inside spread to remove liquidity</span>
+          </div>
+
+          <div class="flow-connector">
+            <span class="connector-arrow">➔</span>
+            <span class="connector-label">MATCHED AT</span>
+            <span class="connector-price" id="modalConnectorPrice">$—</span>
+          </div>
+
+          <div class="flow-card maker-flow" id="modalMakerBox">
+            <span class="flow-role">RESTING QUEUE (MAKER)</span>
+            <span class="flow-id" id="modalMakerId">Order #—</span>
+            <span class="flow-badge maker-badge">HEAD OF QUEUE</span>
+            <span class="flow-desc">Earliest arrival at price level (FIFO priority)</span>
+          </div>
+        </div>
+
+        <div class="audit-specs-list">
+          <div class="spec-row">
+            <span class="spec-label">Execution Settlement:</span>
+            <span class="spec-val" id="modalSettlementVal">—</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Shares Transacted:</span>
+            <span class="spec-val" id="modalSharesVal">—</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Priority Rule Enforced:</span>
+            <span class="spec-val text-cyan">Price-Time Priority (FIFO Head Match)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Intrusive DLL Operation:</span>
+            <span class="spec-val">O(1) Pop from PriceLevel Head (0 heap allocations)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Exact Fixed-Point Math:</span>
+            <span class="spec-val" id="modalTicksVal">—</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">ACID Persistence:</span>
+            <span class="spec-val text-green">Committed to Write-Ahead Log (WAL) via fsync</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

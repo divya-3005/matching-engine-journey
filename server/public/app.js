@@ -10,6 +10,7 @@ function emptyStats() {
 
 const state = {
   activeSymbol: 'AAPL',
+  matchMode: 'audit', // 'audit' | 'tape'
   side: 0, // 0 = Buy, 1 = Sell
   type: 0, // 0 = Limit, 1 = Market
   myOrders: [],
@@ -46,6 +47,21 @@ const spreadValue = document.getElementById('spreadValue');
 const spreadBps = document.getElementById('spreadBps');
 const lastTradedPrice = document.getElementById('lastTradedPrice');
 const tradesStream = document.getElementById('tradesStream');
+const btnModeAudit = document.getElementById('btnModeAudit');
+const btnModeTape = document.getElementById('btnModeTape');
+const tradesTableHeader = document.getElementById('tradesTableHeader');
+
+// Modal Elements
+const matchModalBackdrop = document.getElementById('matchModalBackdrop');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+const modalTradeTitle = document.getElementById('modalTradeTitle');
+const modalTakerId = document.getElementById('modalTakerId');
+const modalTakerSideBadge = document.getElementById('modalTakerSideBadge');
+const modalConnectorPrice = document.getElementById('modalConnectorPrice');
+const modalMakerId = document.getElementById('modalMakerId');
+const modalSettlementVal = document.getElementById('modalSettlementVal');
+const modalSharesVal = document.getElementById('modalSharesVal');
+const modalTicksVal = document.getElementById('modalTicksVal');
 const ordersTableBody = document.getElementById('ordersTableBody');
 const openOrdersCount = document.getElementById('openOrdersCount');
 const wsStatus = document.getElementById('wsStatus');
@@ -383,6 +399,16 @@ function handleServerEvent(msg) {
     trades.forEach(t => {
       recordTrade(msg.symbol, t);
       updateCandleOnTrade(msg.symbol, t.price / 100, t.amount, t.timestamp || Date.now());
+
+      // Visually pulse matched price level in L2 Order Book
+      if (msg.symbol === state.activeSymbol) {
+        const priceFormatted = (t.price / 100).toFixed(2);
+        const row = document.querySelector(`.book-row[data-price="${priceFormatted}"]`);
+        if (row) {
+          row.classList.add('book-row-matched');
+          setTimeout(() => row.classList.remove('book-row-matched'), 650);
+        }
+      }
     });
     updateOpenOrdersAfterMatch(trades);
     if (msg.symbol === state.activeSymbol) {
@@ -568,20 +594,116 @@ function renderTradesStream() {
     return;
   }
 
-  tradesStream.innerHTML = trades.map((t, idx) => {
-    const isBuy = t.side === 0;
-    const priceFormatted = (t.price / 100).toFixed(2);
-    const timeStr = new Date(t.timestamp).toTimeString().split(' ')[0];
-    const isNew = idx === 0 ? 'new-match' : '';
+  if (state.matchMode === 'audit') {
+    tradesStream.innerHTML = trades.map((t, idx) => {
+      const isBuy = t.side === 0;
+      const priceFormatted = (t.price / 100).toFixed(2);
+      const notionalFormatted = ((t.price * t.amount) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const timeStr = new Date(t.timestamp).toTimeString().split(' ')[0];
+      const isNew = idx === 0 ? 'new-match' : '';
 
-    return `
-      <div class="trade-row ${isNew}">
-        <span class="col-price ${isBuy ? 'price-buy' : 'price-sell'}">$${priceFormatted}</span>
-        <span class="col-size">${t.amount.toLocaleString()}</span>
-        <span class="col-time">${timeStr}</span>
-      </div>
-    `;
-  }).join('');
+      return `
+        <div class="match-card ${isNew}" onclick="inspectTrade(${idx})">
+          <div class="match-card-header">
+            <div class="match-linkage">
+              <span class="id-pill ${isBuy ? 'taker-pill-buy' : 'taker-pill-sell'}">
+                TAKER #${t.taker_order_id} ${isBuy ? 'BUY' : 'SELL'}
+              </span>
+              <span class="match-arrow">➔</span>
+              <span class="id-pill maker-pill">
+                MAKER #${t.maker_order_id}
+              </span>
+            </div>
+            <span class="fifo-badge">FIFO 1ST</span>
+          </div>
+
+          <div class="match-card-body">
+            <span class="match-price ${isBuy ? 'text-buy' : 'text-sell'}">$${priceFormatted}</span>
+            <div class="match-details">
+              <span>${t.amount.toLocaleString()} UNITS</span>
+              <span>$${notionalFormatted}</span>
+              <span class="match-time">${timeStr}</span>
+            </div>
+          </div>
+
+          <div class="match-card-footer">
+            <span>⚡ Matched from Head of PriceLevel queue</span>
+            <span class="match-action-hint">Audit Invariants ↗</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    tradesStream.innerHTML = trades.map((t, idx) => {
+      const isBuy = t.side === 0;
+      const priceFormatted = (t.price / 100).toFixed(2);
+      const timeStr = new Date(t.timestamp).toTimeString().split(' ')[0];
+
+      return `
+        <div class="trade-row-compact" onclick="inspectTrade(${idx})">
+          <span class="col-link-text">#${t.taker_order_id} ➔ #${t.maker_order_id}</span>
+          <span class="${isBuy ? 'text-buy' : 'text-sell'}">$${priceFormatted}</span>
+          <span>${t.amount.toLocaleString()}</span>
+          <span class="col-time">${timeStr}</span>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+window.inspectTrade = function(idx) {
+  const trades = state.recentTrades[state.activeSymbol] || [];
+  const t = trades[idx];
+  if (!t) return;
+
+  const isBuy = t.side === 0;
+  const priceFormatted = (t.price / 100).toFixed(2);
+  const notionalFormatted = ((t.price * t.amount) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  modalTradeTitle.textContent = `Taker #${t.taker_order_id} (${isBuy ? 'BUY' : 'SELL'}) ➔ Maker #${t.maker_order_id}`;
+  modalTakerId.textContent = `Order #${t.taker_order_id}`;
+  modalTakerSideBadge.textContent = isBuy ? 'BUY (TAKER)' : 'SELL (TAKER)';
+  modalTakerSideBadge.className = `flow-badge ${isBuy ? 'buy-badge' : 'sell-badge'}`;
+  modalConnectorPrice.textContent = `$${priceFormatted}`;
+  modalMakerId.textContent = `Order #${t.maker_order_id}`;
+  modalSettlementVal.textContent = `$${notionalFormatted} USD`;
+  modalSharesVal.textContent = `${t.amount.toLocaleString()} shares @ $${priceFormatted}`;
+  modalTicksVal.textContent = `${t.price.toLocaleString()} ticks × ${t.amount} units = ${(t.price * t.amount).toLocaleString()} cents`;
+
+  matchModalBackdrop.style.display = 'flex';
+};
+
+if (modalCloseBtn) {
+  modalCloseBtn.addEventListener('click', () => {
+    matchModalBackdrop.style.display = 'none';
+  });
+}
+if (matchModalBackdrop) {
+  matchModalBackdrop.addEventListener('click', e => {
+    if (e.target === matchModalBackdrop) {
+      matchModalBackdrop.style.display = 'none';
+    }
+  });
+}
+
+if (btnModeAudit && btnModeTape) {
+  btnModeAudit.addEventListener('click', () => {
+    state.matchMode = 'audit';
+    btnModeAudit.classList.add('active');
+    btnModeTape.classList.remove('active');
+    tradesStream.classList.add('audit-mode');
+    tradesTableHeader.style.display = 'none';
+    renderTradesStream();
+  });
+
+  btnModeTape.addEventListener('click', () => {
+    state.matchMode = 'tape';
+    btnModeTape.classList.add('active');
+    btnModeAudit.classList.remove('active');
+    tradesStream.classList.remove('audit-mode');
+    tradesTableHeader.style.display = 'grid';
+    renderTradesStream();
+  });
 }
 
 function renderTickerForActiveSymbol() {
