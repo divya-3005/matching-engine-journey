@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Test & Benchmark
+    name: Test, Fuzz & Benchmark
     runs-on: ubuntu-latest
 
     defaults:
@@ -24,6 +24,14 @@ jobs:
         with:
           go-version: '1.22.x'
 
+      - name: Check Formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Unformatted Go code found:"
+            gofmt -l .
+            exit 1
+          fi
+
       - name: Verify Dependencies
         run: go mod verify
 
@@ -32,6 +40,12 @@ jobs:
 
       - name: Run Unit Tests with Race Detector
         run: go test -v -race ./...
+
+      - name: Run Latency Distribution Profiling
+        run: go test -v -run TestOrderLatencyDistribution ./engine
+
+      - name: Run Invariant Fuzz Testing (5s)
+        run: go test -fuzz=FuzzOrderMatchingInvariants -fuzztime=5s ./engine
 
       - name: Run Engine Benchmarks
         run: go test -bench=. -benchmem -run=^$ ./...

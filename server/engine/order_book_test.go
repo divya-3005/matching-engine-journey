@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -479,4 +480,164 @@ func TestGetOpenOrders(t *testing.T) {
 	if ok {
 		t.Fatalf("expected ok=false for unknown symbol open orders")
 	}
+}
+
+// TestOrderLatencyDistribution samples 100,000 matching cycles to calculate the true
+// latency distribution (p50, p90, p99, p99.9). Financial systems demand predictable tail
+// latency, not just mean averages that hide GC or lock spikes.
+func TestOrderLatencyDistribution(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping latency distribution test in short mode")
+	}
+
+	ob := NewOrderBook("AAPL")
+	nextID := uint64(1)
+
+	// Pre-seed liquidity
+	for i := 0; i < 500; i++ {
+		_, _ = ob.ProcessOrder(&Order{
+			ID: nextID, Symbol: "AAPL", Side: Sell,
+			Price: uint64(100 + (i % 20)), Amount: 50, Timestamp: int64(i),
+		})
+		nextID++
+	}
+
+	const samples = 100_000
+	latencies := make([]int64, samples)
+
+	for i := 0; i < samples; i++ {
+		buyOrder := &Order{
+			ID: nextID, Symbol: "AAPL", Side: Buy, Type: Limit,
+			Price: 110, Amount: 1, Timestamp: int64(i),
+		}
+		nextID++
+
+		start := time.Now()
+		trades, err := ob.ProcessOrder(buyOrder)
+		elapsed := time.Since(start).Nanoseconds()
+
+		if err != nil || len(trades) != 1 {
+			t.Fatalf("unexpected matching failure: %v", err)
+		}
+		latencies[i] = elapsed
+
+		// Replenish
+		_, _ = ob.ProcessOrder(&Order{
+			ID: nextID, Symbol: "AAPL", Side: Sell, Type: Limit,
+			Price: trades[0].Price, Amount: 1, Timestamp: int64(i),
+		})
+		nextID++
+	}
+
+	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+
+	p50 := latencies[int(float64(samples)*0.50)]
+	p90 := latencies[int(float64(samples)*0.90)]
+	p99 := latencies[int(float64(samples)*0.99)]
+	p999 := latencies[int(float64(samples)*0.999)]
+	maxLat := latencies[samples-1]
+
+	t.Logf("=== Matching Latency Distribution (N=%d) ===", samples)
+	t.Logf("  p50   : %d ns", p50)
+	t.Logf("  p90   : %d ns", p90)
+	t.Logf("  p99   : %d ns", p99)
+	t.Logf("  p99.9 : %d ns", p999)
+	t.Logf("  max   : %d ns", maxLat)
+
+	if p99 > 10_000 { // 10 microseconds threshold
+		t.Errorf("p99 latency exceeded 10us SLA: got %d ns", p99)
+	}
+}
+
+// FuzzOrderMatchingInvariants runs property-based fuzz testing across randomized order streams,
+// rigorously validating four financial and structural invariants after every transaction:
+// 1. Cross-Book Invariant: BestBid.Price < BestAsk.Price (resting books never cross).
+// 2. Volume Conservation: PriceLevel.TotalVolume == sum of resting orders at that level.
+// 3. Intrusive DLL Symmetry: For every order, order.Next.Prev == order and order.Prev.Next == order.
+// 4. Index Consistency: Every order in ob.Orders must exist with positive amount and consistent ID.
+func FuzzOrderMatchingInvariants(f *testing.F) {
+	f.Add(uint8(0), uint8(0), uint64(100), uint64(10))
+	f.Add(uint8(1), uint8(0), uint64(105), uint64(15))
+	f.Add(uint8(0), uint8(1), uint64(0), uint64(5))
+	f.Add(uint8(1), uint8(1), uint64(0), uint64(20))
+
+	ob := NewOrderBook("AAPL")
+	nextID := uint64(1)
+
+	f.Fuzz(func(t *testing.T, rawSide uint8, rawType uint8, rawPrice uint64, rawAmount uint64) {
+		side := Side(rawSide % 2)
+		orderType := OrderType(rawType % 2)
+		price := (rawPrice % 1000) + 1
+		amount := (rawAmount % 500) + 1
+
+		order := &Order{
+			ID:        nextID,
+			Symbol:    "AAPL",
+			Side:      side,
+			Type:      orderType,
+			Price:     price,
+			Amount:    amount,
+			Timestamp: time.Now().UnixMilli(),
+		}
+		nextID++
+
+		_, _ = ob.ProcessOrder(order)
+
+		// Invariant 1: Resting books must never cross (bids strictly below asks)
+		bid, hasBid, ask, hasAsk := ob.TopOfBook()
+		if hasBid && hasAsk && bid >= ask {
+			t.Fatalf("INVARIANT VIOLATION (Crossed Book): best bid %d >= best ask %d", bid, ask)
+		}
+
+		// Invariant 2 & 3: Level Volume & Pointer Symmetry
+		for _, level := range ob.Bids {
+			var vol uint64
+			curr := level.Head
+			var prev *Order
+			for curr != nil {
+				vol += curr.Amount
+				if curr.Prev != prev {
+					t.Fatalf("INVARIANT VIOLATION: Bid DLL prev pointer broken at order %d", curr.ID)
+				}
+				prev = curr
+				curr = curr.Next
+			}
+			if level.Tail != prev {
+				t.Fatalf("INVARIANT VIOLATION: Bid DLL tail mismatch")
+			}
+			if vol != level.TotalVolume {
+				t.Fatalf("INVARIANT VIOLATION: Bid volume mismatch: computed %d, level has %d", vol, level.TotalVolume)
+			}
+		}
+
+		for _, level := range ob.Asks {
+			var vol uint64
+			curr := level.Head
+			var prev *Order
+			for curr != nil {
+				vol += curr.Amount
+				if curr.Prev != prev {
+					t.Fatalf("INVARIANT VIOLATION: Ask DLL prev pointer broken at order %d", curr.ID)
+				}
+				prev = curr
+				curr = curr.Next
+			}
+			if level.Tail != prev {
+				t.Fatalf("INVARIANT VIOLATION: Ask DLL tail mismatch")
+			}
+			if vol != level.TotalVolume {
+				t.Fatalf("INVARIANT VIOLATION: Ask volume mismatch: computed %d, level has %d", vol, level.TotalVolume)
+			}
+		}
+
+		// Invariant 4: Map consistency
+		for id, ord := range ob.Orders {
+			if ord.ID != id {
+				t.Fatalf("INVARIANT VIOLATION: Map ID mismatch: key %d != order %d", id, ord.ID)
+			}
+			if ord.Amount == 0 {
+				t.Fatalf("INVARIANT VIOLATION: Resting order %d has 0 amount", id)
+			}
+		}
+	})
 }
